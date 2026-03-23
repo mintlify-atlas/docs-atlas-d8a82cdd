@@ -1,80 +1,105 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Connect to a live OpenEnv environment in under 5 minutes"
 ---
 
-## Get started in three steps
+## Install
 
-Get your documentation site running locally and make your first customization.
+<Steps>
+  <Step title="Install openenv-core">
+    ```bash
+    pip install openenv-core
+    ```
+  </Step>
+  <Step title="Clone the OpenEnv repo for typed clients">
+    The typed environment clients live in the OpenEnv repository:
+    ```bash
+    git clone https://github.com/meta-pytorch/OpenEnv.git
+    ```
+    Then add both paths to your Python path:
+    ```python
+    import sys, os
+    repo = os.path.abspath('OpenEnv')
+    sys.path.insert(0, repo)
+    sys.path.insert(0, os.path.join(repo, 'src'))
+    ```
+  </Step>
+</Steps>
 
-### Step 1: Set up your local environment
+## Connect to your first environment
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+OpenEnv has two environment types. Choose one to start:
 
-### Step 2: Deploy your changes
+<Tabs>
+  <Tab title="MCP Tool-Based (Echo)">
+    The Echo environment uses the MCP tool-calling interface — good for understanding tool-based interaction:
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```python
+    from envs.echo_env import EchoEnv
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    with EchoEnv(base_url="https://openenv-echo-env.hf.space").sync() as env:
+        env.reset()
+        response = env.call_tool("echo_message", message="Hello, OpenEnv!")
+        print(response)  # Hello, OpenEnv!
+    ```
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    MCP environments expose `list_tools()` and `call_tool(name, **kwargs)` instead of `step()`.
+  </Tab>
+  <Tab title="Standard RL (OpenSpiel Catch)">
+    The standard interface uses `reset()`, `step()`, and `state()`. This is what most environments use:
 
-### Step 3: Go live
+    ```python
+    from envs.openspiel_env import OpenSpielEnv
+    from envs.openspiel_env.models import OpenSpielAction
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    with OpenSpielEnv(base_url="https://openenv-openspiel-catch.hf.space").sync() as env:
+        result = env.reset()
+        print(result.observation.legal_actions)  # e.g. [0, 1, 2]
 
-## Next steps
+        result = env.step(OpenSpielAction(action_id=1, game_name="catch"))
+        print(result.observation.info_state)     # Game state vector
+        print(result.done)                        # False (game continues)
+    ```
+  </Tab>
+</Tabs>
 
-Now that you have your docs running, explore these key features:
+## Run a full episode
+
+Play a complete game of Catch with a simple heuristic policy:
+
+```python
+import random
+from envs.openspiel_env import OpenSpielEnv
+from envs.openspiel_env.models import OpenSpielAction
+
+def random_policy(obs):
+    return random.choice(obs.legal_actions)
+
+with OpenSpielEnv(base_url="https://openenv-openspiel-catch.hf.space").sync() as env:
+    result = env.reset()
+    steps = 0
+
+    while not result.done:
+        action_id = random_policy(result.observation)
+        result = env.step(OpenSpielAction(action_id=action_id, game_name="catch"))
+        steps += 1
+
+    print(f"Game over after {steps} steps. Reward: {result.reward}")
+```
+
+## What's next
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Module 1: Why OpenEnv?" icon="circle-question" href="/modules/module-1-concepts">
+    Understand the RL loop, Gymnasium's limitations, and OpenEnv's architecture
+  </Card>
+  <Card title="Module 2: Using Environments" icon="play" href="/modules/module-2-concepts">
+    Use the Environment Hub, write policies, and run a competition
+  </Card>
+  <Card title="Environment Hub" icon="cubes" href="https://huggingface.co/collections/openenv/environment-hub">
+    Browse all available hosted environments
+  </Card>
+  <Card title="Reference: 3-Method Interface" icon="code" href="/reference/3-method-interface">
+    Full API reference for reset(), step(), and state()
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

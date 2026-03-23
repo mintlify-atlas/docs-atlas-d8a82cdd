@@ -1,0 +1,93 @@
+---
+title: "The RL loop"
+description: "The observe-act-reward loop and how OpenEnv fits into it"
+---
+
+## The loop
+
+Reinforcement Learning is a single loop repeated until an episode ends:
+
+```python
+while not done:
+    observation = environment.observe()
+    action = policy.choose(observation)
+    reward = environment.step(action)
+    policy.learn(reward)
+```
+
+Observe → Act → Reward → Repeat. Every RL system — from game-playing bots to LLM fine-tuning — follows this pattern.
+
+## How OpenEnv maps to the loop
+
+Each phase of the loop corresponds to a concrete OpenEnv primitive:
+
+| Loop phase | OpenEnv primitive | Description |
+|------------|------------------|-------------|
+| **Observe** | `reset()` / `step()` | Both return a `StepResult` containing the new observation |
+| **Act** | Action model (e.g. `WordGameAction`) | A typed Pydantic model passed to `step()` |
+| **Reward** | `StepResult.reward` | A `float` or `None` returned by `step()` |
+| **Done** | `StepResult.done` | A `bool` that signals episode end |
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  RL Loop                 OpenEnv primitive                  │
+│                                                             │
+│  OBSERVE  ──────────►  env.reset() / env.step()            │
+│                         └─ StepResult.observation          │
+│                                                             │
+│  ACT      ──────────►  action = WordGameAction(guess="a")  │
+│                         env.step(action)                   │
+│                                                             │
+│  REWARD   ──────────►  StepResult.reward  (float)          │
+│                         StepResult.done   (bool)           │
+│                                                             │
+│  LEARN    ──────────►  your policy update (GRPO, PPO, …)   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## A concrete episode
+
+Here is the full loop using a synchronous OpenEnv client:
+
+```python
+from word_game import WordGameEnv, WordGameAction
+
+with WordGameEnv(base_url="https://user-word-game.hf.space").sync() as env:
+    result = env.reset()              # Observe: get first observation
+
+    while not result.done:
+        action = policy(result.observation)          # Act
+        result = env.step(WordGameAction(guess=action))  # Observe + Reward
+        policy.learn(result.reward)  # Learn
+```
+
+<Note>
+  `reset()` also returns a `StepResult`. The `reward` field is `None` after reset — there is no reward until the first `step()`.
+</Note>
+
+## GRPO and the RL loop
+
+GRPO (Group Relative Policy Optimization) used in LLM fine-tuning fits directly into this loop. The LLM is the policy; `step()` provides the reward signal that drives training.
+
+In Module 5, TRL's `GRPOTrainer` wraps this loop automatically — you supply the OpenEnv client, and TRL handles batching, rollouts, and gradient updates.
+
+<Tip>
+  The loop is the same regardless of environment complexity. Once you understand it for Echo, it works identically for OpenSpiel, TextArena, or your own custom game.
+</Tip>
+
+## Related pages
+
+<CardGroup cols={2}>
+  <Card title="3-method interface" icon="code" href="/reference/3-method-interface">
+    Complete reference for `reset()`, `step()`, and `state()`.
+  </Card>
+  <Card title="Module 1: Why OpenEnv?" icon="book" href="/modules/module-1-concepts">
+    The RL loop in context — why microservice environments beat in-process ones.
+  </Card>
+  <Card title="Module 5: Training with TRL" icon="play" href="/modules/module-5-concepts">
+    Using GRPO with OpenEnv environments.
+  </Card>
+  <Card title="3-component pattern" icon="layers" href="/reference/3-component-pattern">
+    How every OpenEnv environment is structured.
+  </Card>
+</CardGroup>

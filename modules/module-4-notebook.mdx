@@ -1,0 +1,267 @@
+---
+title: "Module 4 Notebook"
+description: "Hands-on: scaffold, implement, test, and deploy a word game environment"
+---
+
+## Overview
+
+This notebook puts the concepts from [Module 4](/modules/module-4-concepts) into practice. You'll scaffold a word game environment from scratch using `openenv init`, implement the game logic, test it locally, and deploy it to HF Spaces.
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/huggingface/openenv-course/blob/main/module-4/notebook.ipynb)
+
+## What the notebook builds
+
+A word-guessing game environment with:
+
+- **Typed models** — `WordGameAction`, `WordGameObservation`, `WordGameState` defined in `models.py`
+- **Game logic** — `reset()`, `step()`, and win/lose detection in `server/environment.py`
+- **Python client** — `WordGameEnv` with typed observations and IDE autocomplete
+- **FastAPI server** — all endpoints created by a single `create_fastapi_app()` call
+- **Docker container** — ready to deploy to HF Spaces
+
+## What the notebook covers
+
+<Steps>
+  <Step title="Scaffold the project">
+    Generate the full directory structure with `openenv init`:
+
+    ```bash
+    openenv init word_game
+    cd word_game
+    ```
+
+    This creates `models.py`, `client.py`, `server/environment.py`, `server/app.py`, `server/Dockerfile`, `openenv.yaml`, and `pyproject.toml` with placeholder code.
+  </Step>
+
+  <Step title="Define the types">
+    Replace the placeholder models in `models.py` with the word game types:
+
+    ```python models.py
+    from typing import List, Optional
+    from openenv.core.env_server import Action, Observation, State
+
+    class WordGameAction(Action):
+        guess: str
+
+    class WordGameObservation(Observation):
+        masked_word: str
+        guessed_letters: List[str]
+        attempts_remaining: int
+        message: str
+
+    class WordGameState(State):
+        target_word: str = ""
+        max_attempts: int = 10
+    ```
+  </Step>
+
+  <Step title="Implement the game logic">
+    Fill in `server/environment.py` with the word-guessing logic. The key methods are `reset()` and `step()`:
+
+    ```python server/environment.py
+    import random
+    import uuid
+    from openenv.core.env_server import Environment
+    from .models import WordGameAction, WordGameObservation, WordGameState
+
+    WORDS = ["python", "neural", "tensor", "matrix", "vector",
+             "kernel", "lambda", "signal", "binary", "cipher"]
+
+    class WordGameEnvironment(Environment):
+        SUPPORTS_CONCURRENT_SESSIONS = True
+
+        def __init__(self):
+            self._state = WordGameState()
+            self._target = ""
+            self._guessed = set()
+            self._remaining = 6
+
+        def reset(self, seed=None, episode_id=None, **kwargs) -> WordGameObservation:
+            self._target = random.choice(WORDS)
+            self._guessed = set()
+            self._remaining = 6
+            self._state = WordGameState(
+                episode_id=episode_id or str(uuid.uuid4()),
+                step_count=0,
+                target_word=self._target,
+                max_attempts=6,
+            )
+            return WordGameObservation(
+                done=False,
+                reward=None,
+                masked_word=self._mask(),
+                guessed_letters=[],
+                attempts_remaining=self._remaining,
+                message=f"Guess letters in a {len(self._target)}-letter word!",
+            )
+
+        def step(self, action: WordGameAction, timeout_s=None, **kwargs) -> WordGameObservation:
+            letter = action.guess.lower().strip()
+            self._state.step_count += 1
+            self._guessed.add(letter)
+
+            if letter in self._target:
+                message = f"'{letter}' is in the word!"
+            else:
+                self._remaining -= 1
+                message = f"'{letter}' is not in the word."
+
+            masked = self._mask()
+            won = "_" not in masked
+            lost = self._remaining <= 0
+            done = won or lost
+
+            if won:
+                reward = 1.0
+                message = f"You got it! The word was '{self._target}'."
+            elif lost:
+                reward = 0.0
+                message = f"Out of attempts. The word was '{self._target}'."
+            else:
+                reward = 0.0
+
+            return WordGameObservation(
+                done=done,
+                reward=reward,
+                masked_word=masked,
+                guessed_letters=sorted(self._guessed),
+                attempts_remaining=self._remaining,
+                message=message,
+            )
+
+        @property
+        def state(self) -> WordGameState:
+            return self._state
+
+        def _mask(self) -> str:
+            return "".join(c if c in self._guessed else "_" for c in self._target)
+    ```
+  </Step>
+
+  <Step title="Implement the client">
+    Fill in `client.py` to parse server payloads into typed observations:
+
+    ```python client.py
+    from openenv.core.env_client import EnvClient
+    from openenv.core.client_types import StepResult
+    from .models import WordGameAction, WordGameObservation, WordGameState
+
+    class WordGameEnv(EnvClient[WordGameAction, WordGameObservation, WordGameState]):
+        def _step_payload(self, action: WordGameAction) -> dict:
+            return {"guess": action.guess}
+
+        def _parse_result(self, payload: dict) -> StepResult:
+            obs_data = payload.get("observation", {})
+            return StepResult(
+                observation=WordGameObservation(
+                    done=payload.get("done", False),
+                    reward=payload.get("reward"),
+                    masked_word=obs_data.get("masked_word", ""),
+                    guessed_letters=obs_data.get("guessed_letters", []),
+                    attempts_remaining=obs_data.get("attempts_remaining", 0),
+                    message=obs_data.get("message", ""),
+                ),
+                reward=payload.get("reward"),
+                done=payload.get("done", False),
+            )
+
+        def _parse_state(self, payload: dict) -> WordGameState:
+            return WordGameState(
+                episode_id=payload.get("episode_id"),
+                step_count=payload.get("step_count", 0),
+                target_word=payload.get("target_word", ""),
+                max_attempts=payload.get("max_attempts", 6),
+            )
+    ```
+  </Step>
+
+  <Step title="Test locally">
+    Start the development server and verify it responds:
+
+    ```bash
+    uv run server
+    ```
+
+    ```bash
+    curl http://localhost:8000/health
+    # {"status": "healthy"}
+    ```
+  </Step>
+
+  <Step title="Deploy to HF Spaces">
+    Push your environment to a Hugging Face Space:
+
+    ```bash
+    openenv push --repo-id user/word-game
+    ```
+
+    Your environment is now live at `https://user-word-game.hf.space`.
+  </Step>
+</Steps>
+
+## Running the notebook
+
+<Steps>
+  <Step title="Open in Google Colab">
+    Click the **Open in Colab** badge above, or navigate directly to:
+
+    ```
+    https://colab.research.google.com/github/huggingface/openenv-course/blob/main/module-4/notebook.ipynb
+    ```
+  </Step>
+  <Step title="Set your Hugging Face token">
+    You'll need a Hugging Face token with write access to push your Space. Add it as a Colab secret or set it in the environment before running the deploy step.
+  </Step>
+  <Step title="Run all cells top-to-bottom">
+    Each section builds on the previous one. The scaffold, implement, test, and deploy steps must run in order.
+  </Step>
+</Steps>
+
+## Key code patterns
+
+<Tabs>
+  <Tab title="models.py">
+    Inherit from `Action`, `Observation`, and `State`. Base classes already include common fields like `done`, `reward`, `episode_id`, and `step_count`:
+
+    ```python
+    class WordGameObservation(Observation):
+        # done: bool and reward: Optional[float] inherited from Observation
+        masked_word: str
+        guessed_letters: List[str]
+        attempts_remaining: int
+        message: str
+    ```
+  </Tab>
+  <Tab title="server/app.py">
+    One line creates all seven endpoints:
+
+    ```python
+    from openenv.core.env_server import create_fastapi_app
+    from environment import WordGameEnvironment
+
+    app = create_fastapi_app(WordGameEnvironment)
+    ```
+  </Tab>
+  <Tab title="Deploy">
+    Scaffold, test, and deploy:
+
+    ```bash
+    openenv init word_game
+    uv run server
+    openenv push --repo-id user/word-game
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  The 3-component pattern — types, server logic, client — is the same for every environment you build. Once you've built one, the next one is much faster.
+</Note>
+
+<CardGroup cols={2}>
+  <Card title="Back to concepts" icon="book" href="/modules/module-4-concepts">
+    Review the 3-component pattern, all 5 build steps, and the fast path with `openenv init`.
+  </Card>
+  <Card title="Module 5" icon="play" href="/modules/module-5-concepts">
+    Continue to the next module.
+  </Card>
+</CardGroup>

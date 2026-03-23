@@ -1,122 +1,76 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "OpenEnv Course",
+  "theme": "almond",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#bd8236",
+    "light": "#dad2cb",
+    "dark": "#fbab04"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "https://media.brand.dev/e8fea91e-7881-47ed-92cf-9c88e3d555ed.png",
+  "logo": {
+    "light": "https://media.brand.dev/0f327b3b-c8f3-4d2b-9f04-b159d42348a4.png",
+    "dark": "https://media.brand.dev/e8fea91e-7881-47ed-92cf-9c88e3d555ed.png"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/huggingface/openenv-course"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/huggingface/openenv-course"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Course",
         "groups": [
           {
-            "group": "Getting started",
-            "pages": [
-              "index",
-              "quickstart",
-              "development"
-            ]
+            "group": "Overview",
+            "pages": ["introduction", "quickstart"]
           },
           {
-            "group": "Customization",
-            "pages": [
-              "essentials/settings",
-              "essentials/navigation"
-            ]
+            "group": "Module 1: Why OpenEnv?",
+            "pages": ["modules/module-1-concepts", "modules/module-1-notebook"]
           },
           {
-            "group": "Writing content",
-            "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
+            "group": "Module 2: Using Environments",
+            "pages": ["modules/module-2-concepts", "modules/module-2-notebook"]
           },
           {
-            "group": "AI tools",
-            "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
-            ]
+            "group": "Module 3: Deploying Environments",
+            "pages": ["modules/module-3-concepts", "modules/module-3-notebook"]
+          },
+          {
+            "group": "Module 4: Building Environments",
+            "pages": ["modules/module-4-concepts", "modules/module-4-notebook"]
+          },
+          {
+            "group": "Module 5: Training with TRL",
+            "pages": ["modules/module-5-concepts", "modules/module-5-notebook"]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "Reference",
         "groups": [
           {
-            "group": "API documentation",
-            "pages": [
-              "api-reference/introduction"
-            ]
+            "group": "Core Concepts",
+            "pages": ["reference/rl-loop", "reference/3-method-interface", "reference/3-component-pattern"]
           },
           {
-            "group": "Endpoint examples",
-            "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
-            ]
+            "group": "CLI",
+            "pages": ["reference/cli-init", "reference/cli-push"]
+          },
+          {
+            "group": "Scaling",
+            "pages": ["reference/scaling"]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

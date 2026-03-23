@@ -1,0 +1,132 @@
+---
+title: "Module 3 Notebook"
+description: "Hands-on: clone, modify, run locally, and deploy an environment to HF Spaces"
+---
+
+## Overview
+
+This notebook puts the concepts from [Module 3](/modules/module-3-concepts) into practice. You'll clone the Echo environment, modify its logic, run it locally with Uvicorn, and deploy your modified version to HF Spaces using `openenv push`.
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/huggingface/openenv-course/blob/main/module-3/notebook.ipynb)
+
+## What the notebook covers
+
+<Steps>
+  <Step title="Clone the Echo environment">
+    Clone the Echo environment Space from Hugging Face and install its dependencies:
+
+    ```bash
+    git clone https://huggingface.co/spaces/openenv/echo-env
+    cd echo-env
+    uv sync
+    ```
+  </Step>
+  <Step title="Run it locally">
+    Start the development server and confirm it responds:
+
+    ```bash
+    uv run server
+    ```
+
+    ```bash
+    curl http://localhost:8000/health
+    # {"status": "healthy"}
+    ```
+  </Step>
+  <Step title="Connect from Python">
+    Connect to your locally running environment using the Python client:
+
+    ```python
+    with EchoEnv(base_url="http://localhost:8000").sync() as env:
+        result = env.reset()
+    ```
+  </Step>
+  <Step title="Modify the environment">
+    Edit `server/environment.py` to change the environment's behavior. The `--reload` flag means your changes take effect immediately without restarting the server:
+
+    ```bash
+    uvicorn echo_env.server.app:app --host 0.0.0.0 --port 8000 --reload
+    ```
+  </Step>
+  <Step title="Deploy to HF Spaces">
+    Push your modified environment to your own Hugging Face Space:
+
+    ```bash
+    openenv push --repo-id username/my-env
+    ```
+
+    Your environment is now live and accessible at:
+
+    ```
+    https://username-my-env.hf.space
+    ```
+  </Step>
+  <Step title="Install from the Space repository">
+    Install the client package directly from your deployed Space:
+
+    ```bash
+    pip install git+https://huggingface.co/spaces/username/my-env
+    ```
+  </Step>
+</Steps>
+
+## Running the notebook
+
+<Steps>
+  <Step title="Open in Google Colab">
+    Click the **Open in Colab** badge above, or navigate directly to:
+
+    ```
+    https://colab.research.google.com/github/huggingface/openenv-course/blob/main/module-3/notebook.ipynb
+    ```
+  </Step>
+  <Step title="Set your Hugging Face token">
+    You'll need a Hugging Face token with write access to push your Space. Add it as a Colab secret or set it in the environment before running the push step.
+  </Step>
+  <Step title="Run all cells top-to-bottom">
+    Each section builds on the previous one. The clone, modify, and deploy steps must run in order.
+  </Step>
+</Steps>
+
+## Key commands
+
+<Tabs>
+  <Tab title="Local development">
+    Clone, install, and run the environment locally:
+
+    ```bash
+    git clone https://huggingface.co/spaces/openenv/echo-env
+    cd echo-env
+    uv sync
+    uv run server
+    ```
+  </Tab>
+  <Tab title="Docker">
+    Pull the pre-built image and run it locally:
+
+    ```bash
+    docker pull registry.hf.space/openenv-echo-env:latest
+    docker run -d -p 8000:8000 registry.hf.space/openenv-echo-env:latest
+    ```
+  </Tab>
+  <Tab title="Deploy">
+    Push your environment to a Hugging Face Space:
+
+    ```bash
+    openenv push --repo-id username/my-env
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  One Space gives you a running server, a pip-installable package, and a Docker image. `openenv push` gets you there in one command.
+</Note>
+
+<CardGroup cols={2}>
+  <Card title="Back to concepts" icon="book" href="/modules/module-3-concepts">
+    Review local dev, Docker deployment, and the full deploy workflow.
+  </Card>
+  <Card title="Module 4" icon="play" href="/modules/module-4-concepts">
+    Continue to the next module.
+  </Card>
+</CardGroup>

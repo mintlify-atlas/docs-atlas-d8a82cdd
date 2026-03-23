@@ -1,0 +1,105 @@
+---
+title: "Scaling"
+description: "Scale OpenEnv from a single container to multi-node deployments"
+---
+
+## WebSocket vs HTTP
+
+OpenEnv uses WebSocket (`/ws`) for persistent sessions instead of stateless HTTP.
+
+| | WebSocket | HTTP |
+|-|-----------|------|
+| **Connection** | Persistent, established once | New TCP connection per request |
+| **Per-step overhead** | ~0.1 ms (lightweight frame) | ~10–50 ms (TCP handshake) |
+| **Session state** | Maintained server-side | Reconstructed each request |
+| **Use case** | RL training loops (thousands of steps) | One-off requests |
+
+One container handles many isolated sessions — each WebSocket connection gets its own environment instance server-side.
+
+<Note>
+  For training loops that call `step()` thousands of times per episode, the difference between 0.1 ms and 10–50 ms per step is significant at scale.
+</Note>
+
+## Single container scaling
+
+Before adding containers, maximize the capacity of a single deployment by tuning two environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WORKERS` | 4 | Uvicorn worker processes |
+| `MAX_CONCURRENT_ENVS` | 100 | Max WebSocket sessions per worker |
+
+With 8 workers, a single container can handle ~2,048 concurrent sessions for simple text environments.
+
+```bash
+docker run -d -p 8000:8000 \
+    -e WORKERS=8 \
+    -e MAX_CONCURRENT_ENVS=256 \
+    my-env:latest
+```
+
+<Tip>
+  Set `WORKERS` to match the number of CPU cores. Set `MAX_CONCURRENT_ENVS` based on how much memory each environment instance uses.
+</Tip>
+
+## Multi-container with load balancing
+
+When a single container isn't enough, deploy multiple containers behind Envoy:
+
+| Setup | Containers | Sessions/container | Total capacity |
+|-------|------------|-------------------|----------------|
+| Single | 1 | 100 | 100 |
+| 4× containers | 4 | 100 | 400 |
+| 8× containers | 8 | 100 | 800 |
+
+Envoy load-balances incoming WebSocket connections across containers. Each container still maintains session isolation internally.
+
+## Benchmark results
+
+Actual measured throughput across different infrastructure setups:
+
+| Infrastructure | Max concurrent (WS) | Cores | Sessions/core |
+|----------------|---------------------|-------|---------------|
+| HF Spaces (free) | 128 | 2 | 64 |
+| Local Uvicorn | 2,048 | 8 | 256 |
+| Local Docker | 2,048 | 8 | 256 |
+| SLURM multi-node | 16,384 | 96 | 171 |
+
+<Note>
+  Local Uvicorn and Docker achieve the best per-core efficiency (256 sessions/core). SLURM multi-node trades some per-core efficiency for raw total capacity.
+</Note>
+
+## Recommendations
+
+<AccordionGroup>
+  <Accordion title="Development / moderate load (under 2K concurrent)">
+    Use a single Uvicorn or Docker container. Best per-core efficiency at 256 sessions/core.
+
+    ```bash
+    uv run server
+    # or
+    docker run -d -p 8000:8000 -e WORKERS=8 my-env:latest
+    ```
+  </Accordion>
+  <Accordion title="Demos and published environments">
+    Use HF Spaces free tier. Reliable up to 128 concurrent sessions with zero infrastructure management.
+
+    ```bash
+    openenv push --repo-id username/my-env
+    ```
+  </Accordion>
+  <Accordion title="Large-scale training (over 2K concurrent)">
+    Use multi-node with Envoy load balancer. See the [openenv-scaling reference implementation](https://github.com/burtenshaw/openenv-scaling) for configuration examples.
+  </Accordion>
+</AccordionGroup>
+
+## Related pages
+
+<CardGroup cols={2}>
+  <Card title="openenv push" icon="rocket" href="/reference/cli-push">
+    Deploy to HF Spaces and configure `WORKERS` and `MAX_CONCURRENT_ENVS`.
+  </Card>
+  <Card title="Module 3: Deploying environments" icon="book" href="/modules/module-3-concepts">
+    Local dev, Docker, and HF Spaces deployment walkthrough.
+  </Card>
+</CardGroup>

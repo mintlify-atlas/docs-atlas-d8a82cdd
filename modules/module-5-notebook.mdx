@@ -1,0 +1,198 @@
+---
+title: "Module 5 Notebook"
+description: "Hands-on: run the full Wordle GRPO training pipeline on an A100"
+---
+
+## Overview
+
+This notebook puts the concepts from [Module 5](/modules/module-5-concepts) into practice. You'll run a complete end-to-end GRPO training pipeline that teaches Qwen3-1.7B to play Wordle using environment feedback.
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/huggingface/openenv-course/blob/main/module-5/notebook.ipynb)
+
+<Warning>
+  This notebook requires an **A100 40GB GPU**. Training runs for approximately 90 minutes and peaks at ~37GB of GPU memory. A standard Colab T4 will not have enough memory. Use Colab Pro or a cloud instance with an A100 before proceeding.
+</Warning>
+
+## What the notebook does
+
+The notebook runs a full GRPO training loop:
+
+- Connects to the TextArena Wordle environment
+- Configures `GRPOTrainer` with multiple reward functions
+- Defines a rollout function that plays complete Wordle games
+- Trains Qwen3-1.7B for one epoch with vLLM colocate mode
+- Logs training metrics to Trackio
+
+## What the notebook covers
+
+<Steps>
+  <Step title="Connect to the environment">
+    The notebook connects to a hosted TextArena Wordle instance:
+
+    ```python
+    from envs.textarena_env import TextArenaEnv
+
+    env = TextArenaEnv(base_url="https://burtenshaw-textarena.hf.space")
+    ```
+
+    The environment accepts guesses as `[word]` and returns per-letter feedback: `G` (green), `Y` (yellow), `X` (gray).
+  </Step>
+
+  <Step title="Define reward functions">
+    Three reward functions provide shaped gradient signal:
+
+    - `reward_correct` — `1.0` if the model solves the puzzle, `0.0` otherwise
+    - `reward_greens` — fraction of letters in the correct position
+    - `reward_yellows` — fraction of letters present but misplaced
+    - `reward_repetition` — penalty when the model repeats a previous guess
+
+    Greens and yellows reward partial progress so the model receives signal on every turn, not just wins.
+  </Step>
+
+  <Step title="Implement the rollout function">
+    The rollout function plays one complete Wordle game per call. `GRPOTrainer` invokes it for each training sample:
+
+    ```python
+    def rollout_once(trainer, env, tokenizer, prompt, system_prompt, max_turns):
+        result = env.reset()
+        observation = result.observation
+
+        for turn in range(max_turns):
+            if result.done:
+                break
+
+            # Build prompt from game state
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": format_game_state(observation)},
+            ]
+
+            # Generate with the model
+            rollout = generate_rollout_completions(trainer, [messages])
+
+            # Parse guess and send to environment
+            guess = extract_guess(rollout["text"])
+            result = env.step(TextArenaAction(message=guess))
+            observation = result.observation
+
+        return {
+            "prompt_ids": ..., "completion_ids": ..., "logprobs": ...,
+            "correct_reward": ..., "green_reward": ...,
+        }
+    ```
+  </Step>
+
+  <Step title="Configure GRPOTrainer">
+    The trainer is configured for single-GPU training with vLLM in colocate mode:
+
+    ```python
+    grpo_config = GRPOConfig(
+        num_train_epochs=1,
+        learning_rate=5e-6,
+        gradient_accumulation_steps=64,
+        per_device_train_batch_size=1,
+        num_generations=2,
+        max_completion_length=8,
+        max_prompt_length=1400,
+        use_vllm=True,
+        vllm_mode="colocate",
+        vllm_gpu_memory_utilization=0.1,
+        gradient_checkpointing=True,
+        report_to="trackio",
+    )
+    ```
+
+    `vllm_mode="colocate"` lets generation and training share the same GPU. `gradient_accumulation_steps=64` keeps memory usage manageable with `per_device_train_batch_size=1`.
+  </Step>
+
+  <Step title="Run training">
+    Start the training loop:
+
+    ```python
+    trainer = GRPOTrainer(
+        model=model_name,
+        reward_funcs=[reward_correct, reward_greens, reward_yellows],
+        rollout_func=rollout_func,
+        train_dataset=dataset,
+        args=grpo_config,
+    )
+    trainer.train()
+    ```
+
+    Training runs for approximately 90 minutes on an A100. Metrics are logged to Trackio in real time.
+  </Step>
+</Steps>
+
+## Running the notebook
+
+<Steps>
+  <Step title="Open in Google Colab">
+    Click the **Open in Colab** badge above, or navigate directly to:
+
+    ```
+    https://colab.research.google.com/github/huggingface/openenv-course/blob/main/module-5/notebook.ipynb
+    ```
+  </Step>
+  <Step title="Switch to an A100 runtime">
+    In Colab, go to **Runtime > Change runtime type** and select **A100 GPU**. This requires Colab Pro. Do not start training on a smaller GPU.
+  </Step>
+  <Step title="Run all cells top-to-bottom">
+    Each section builds on the previous one. Run cells in order: environment setup, reward functions, rollout function, trainer configuration, and finally `trainer.train()`.
+  </Step>
+</Steps>
+
+## Key code patterns
+
+<Tabs>
+  <Tab title="Reward functions">
+    Pass multiple reward functions to `GRPOTrainer` as a list. TRL calls each one and sums the results:
+
+    ```python
+    trainer = GRPOTrainer(
+        model=model_name,
+        reward_funcs=[reward_correct, reward_greens, reward_yellows],
+        rollout_func=rollout_func,
+        train_dataset=dataset,
+        args=grpo_config,
+    )
+    ```
+  </Tab>
+  <Tab title="Rollout function">
+    The rollout function receives the trainer, environment, tokenizer, prompt, system prompt, and max turns. It returns a dict with token IDs, log probabilities, and reward values:
+
+    ```python
+    def rollout_once(trainer, env, tokenizer, prompt, system_prompt, max_turns):
+        result = env.reset()
+        observation = result.observation
+        # ... game loop ...
+        return {
+            "prompt_ids": ..., "completion_ids": ..., "logprobs": ...,
+            "correct_reward": ..., "green_reward": ...,
+        }
+    ```
+  </Tab>
+  <Tab title="vLLM colocate">
+    Enable vLLM generation on the same GPU as training by setting `vllm_mode="colocate"`:
+
+    ```python
+    grpo_config = GRPOConfig(
+        use_vllm=True,
+        vllm_mode="colocate",
+        vllm_gpu_memory_utilization=0.1,
+    )
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  The rollout function interface is the same regardless of the environment. To train on a different game, swap the environment and update the reward functions — the rest of the pipeline stays the same.
+</Note>
+
+<CardGroup cols={2}>
+  <Card title="Back to concepts" icon="book" href="/modules/module-5-concepts">
+    Review GRPO, reward functions, rollout functions, and hardware requirements.
+  </Card>
+  <Card title="Back to Module 4" icon="arrow-left" href="/modules/module-4-concepts">
+    Review building your own environment with the 3-component pattern.
+  </Card>
+</CardGroup>

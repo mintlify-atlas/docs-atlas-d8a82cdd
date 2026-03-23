@@ -1,0 +1,145 @@
+---
+title: "Module 2: Using Environments"
+description: "The Environment Hub, type-safe models, writing policies, and switching games"
+---
+
+## The Environment Hub
+
+OpenEnv environments live on Hugging Face Spaces. The Environment Hub collection has ready-to-use environments you can connect to immediately — no setup, no Docker, no local install.
+
+Every Space gives you three things:
+
+| Component | What it provides | How to access |
+|-----------|------------------|---------------|
+| **Server** | Running environment endpoint | `https://<username>-<space-name>.hf.space` |
+| **Repository** | Installable Python package | `pip install git+https://huggingface.co/spaces/<space>` |
+| **Registry** | Docker container image | `docker pull registry.hf.space/<space>:latest` |
+
+<Tip>
+  You don't build environments to use them. Install the client, point it at a server, and go.
+</Tip>
+
+## Type-safe models
+
+Every OpenEnv environment defines typed models for actions, observations, and state. These aren't just documentation — they're real Python dataclasses that your IDE can autocomplete and your type checker can validate.
+
+For OpenSpiel environments, the models are Pydantic classes. `done` and `reward` are inherited from `Observation`:
+
+```python
+from openenv.core.env_server import Action, Observation, State
+from pydantic import Field
+from typing import Any, Dict, List, Optional
+
+class OpenSpielAction(Action):
+    action_id: int                              # Which action to take
+    game_name: str = "catch"                   # Which game
+    game_params: Dict[str, Any] = Field(default_factory=dict)  # Game config
+
+class OpenSpielObservation(Observation):
+    # done: bool and reward: Optional[float] are inherited from Observation
+    info_state: List[float]      # Game state as a vector
+    legal_actions: List[int]     # Valid actions this step
+    game_phase: str = "playing"  # Current phase
+    current_player_id: int = 0   # Whose turn
+    opponent_last_action: Optional[int] = None
+```
+
+No more guessing what `obs[0][3]` means.
+
+## OpenSpiel integration
+
+OpenEnv wraps 6 games from DeepMind's OpenSpiel library. All six use the same `OpenSpielEnv` client and the same `OpenSpielAction`/`OpenSpielObservation` types. The only difference is the `game_name` parameter.
+
+| Single-player | Multi-player |
+|---------------|--------------|
+| Catch — catch falling ball | Tic-Tac-Toe — classic 3×3 |
+| Cliff Walking — navigate grid | Kuhn Poker — imperfect info |
+| 2048 — tile puzzle | |
+| Blackjack — card game | |
+
+## Writing policies
+
+A policy is a function that takes an observation and returns an action. All four policies below work with the same `OpenSpielObservation` type.
+
+<Tabs>
+  <Tab title="Random">
+    Baseline policy. Picks a random legal action every step.
+
+    **Expected success rate: ~20%**
+
+    ```python
+    def random_policy(obs):
+        return random.choice(obs.legal_actions)
+    ```
+  </Tab>
+  <Tab title="Always stay">
+    Pathological policy. Always returns the STAY action regardless of state.
+
+    **Expected success rate: ~20%**
+
+    ```python
+    def stay_policy(obs):
+        return 1  # STAY
+    ```
+  </Tab>
+  <Tab title="Smart heuristic">
+    Optimal hand-coded policy. Reads ball and paddle positions from `info_state` and moves toward the ball.
+
+    **Expected success rate: 100%**
+
+    ```python
+    def smart_policy(obs):
+        ball_col = find_ball(obs.info_state)
+        paddle_col = find_paddle(obs.info_state)
+        if paddle_col < ball_col: return 2  # RIGHT
+        if paddle_col > ball_col: return 0  # LEFT
+        return 1  # STAY
+    ```
+  </Tab>
+  <Tab title="Epsilon-greedy">
+    Exploration-first policy that blends random and smart behavior. Epsilon decays over time so the policy becomes more greedy as it gains experience.
+
+    **Expected success rate: ~85%**
+
+    ```python
+    def learning_policy(obs, step):
+        epsilon = max(0.1, 1.0 - step / 100)
+        if random.random() < epsilon:
+            return random.choice(obs.legal_actions)
+        return smart_policy(obs)
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  The key insight: all four policies take an `OpenSpielObservation` and return an action integer. Swap the game from Catch to Tic-Tac-Toe and the observation format stays the same — only the game logic changes.
+</Note>
+
+## Switching games
+
+Because all OpenSpiel games share the same client interface, switching games requires changing only the URL. Your policy code and observation handling stay identical.
+
+```python
+# Catch
+with OpenSpielEnv(base_url="https://openenv-openspiel-catch.hf.space").sync() as env:
+    result = env.reset()
+
+# Tic-Tac-Toe — same client, different URL
+with OpenSpielEnv(base_url="https://openenv-openspiel-tictactoe.hf.space").sync() as env:
+    result = env.reset()
+```
+
+The observation has the same fields. You just need a new strategy for the new game.
+
+## What's next
+
+In the notebook, you'll build and compare all 4 policies on Catch, run a competition to rank them, then switch to another game using the same client code.
+
+<CardGroup cols={2}>
+  <Card title="Module 2 notebook" icon="notebook" href="/modules/module-2-notebook">
+    Hands-on: build 4 policies, run a competition on Catch, and switch games with one line of code.
+  </Card>
+  <Card title="Module 3" icon="play" href="/modules/module-3-concepts">
+    Build your own custom OpenEnv environment from scratch.
+  </Card>
+</CardGroup>

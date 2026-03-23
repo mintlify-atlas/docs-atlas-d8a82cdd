@@ -1,0 +1,150 @@
+---
+title: "3-method interface"
+description: "Complete reference for reset(), step(), and state() — the universal OpenEnv API"
+---
+
+## Overview
+
+Every OpenEnv environment exposes exactly three methods — whether you're using Echo, OpenSpiel, TextArena, or a custom environment you built yourself.
+
+| Method | What it does | Returns |
+|--------|-------------|--------|
+| `reset()` | Start a new episode | `StepResult` (observation, reward, done) |
+| `step(action)` | Take an action | `StepResult` (observation, reward, done) |
+| `state()` | Get episode metadata | `State` (episode_id, step_count, etc.) |
+
+The interface is identical on both sides of the network boundary. The server implements the game logic; the client handles WebSocket communication transparently.
+
+## Methods
+
+### `reset()`
+
+Starts a new episode. Call this before beginning any interaction with the environment.
+
+```python
+result = await env.reset()
+print(result.observation)  # First observation
+print(result.done)         # False at episode start
+print(result.reward)       # None — no reward on reset
+```
+
+<ParamField path="body.kwargs" type="object">
+  Optional keyword arguments passed to the server-side `reset()` implementation. Common keys include `seed` for reproducibility and `episode_id` to assign a custom ID.
+</ParamField>
+
+### `step(action)`
+
+Sends an action to the environment and returns the resulting observation, reward, and done signal.
+
+```python
+from word_game import WordGameAction
+
+result = await env.step(WordGameAction(guess="a"))
+print(result.observation.masked_word)   # e.g. "_a__a_"
+print(result.reward)                    # 0.0 or 1.0
+print(result.done)                      # True when episode ends
+```
+
+<ParamField path="body.action" type="Action" required>
+  A typed Pydantic model that is a subclass of `Action`. The exact fields depend on the environment (e.g. `WordGameAction(guess="a")`, `OpenSpielAction(action_id=3)`).
+</ParamField>
+
+### `state()`
+
+Returns metadata about the current episode without advancing it.
+
+```python
+s = await env.state()
+print(s.episode_id)   # UUID string
+print(s.step_count)   # Number of steps taken so far
+```
+
+Useful for logging, checkpointing, and debugging mid-episode.
+
+## Server-side vs client-side
+
+<Tabs>
+  <Tab title="Server side">
+    The server-side abstract class runs inside Docker and implements your game or simulation logic. `step()` and `reset()` return `Observation` subclasses (not `StepResult`) — the framework wraps them.
+
+    ```python
+    from openenv.core.env_server import Environment, Action, Observation, State
+
+    class Environment(ABC):
+        def reset(self) -> Observation: ...
+        def step(self, action: Action) -> Observation: ...
+
+        @property
+        def state(self) -> State: ...
+    ```
+
+    Note that `state` is a **property** on the server side, not a method.
+  </Tab>
+  <Tab title="Client side">
+    The client-side abstract class is what you import in your training code. All methods are `async`; use the `sync()` wrapper for notebooks and scripts.
+
+    ```python
+    from openenv.core.env_client import EnvClient
+
+    class EnvClient(ABC):
+        async def reset(self, **kwargs) -> StepResult: ...
+        async def step(self, action) -> StepResult: ...
+        async def state(self) -> State: ...
+        def sync(self) -> SyncEnvClient: ...  # Sync wrapper for notebooks/scripts
+    ```
+  </Tab>
+</Tabs>
+
+## The `sync()` wrapper
+
+The client is async by default. For notebooks, scripts, and synchronous training loops, wrap the client with `sync()`:
+
+```python
+# Async (default)
+async with WordGameEnv(base_url="...") as env:
+    result = await env.reset()
+
+# Sync wrapper — no async/await needed
+with WordGameEnv(base_url="...").sync() as env:
+    result = env.reset()
+    result = env.step(WordGameAction(guess="a"))
+```
+
+<Tip>
+  Use `sync()` in Jupyter notebooks and training scripts. The async interface is better for high-throughput parallel rollouts.
+</Tip>
+
+## MCP tool-based variant
+
+For simple MCP-based environments (like the Echo environment), the interface is tool-based instead of method-based:
+
+```python
+tools = await env.list_tools()
+result = await env.call_tool("reset")
+result = await env.call_tool("step", guess="hello")
+```
+
+<Note>
+  MCP environments use `list_tools()` and `call_tool(name, **kwargs)` instead of `reset()`, `step()`, and `state()`. The RL loop logic is identical — only the call syntax differs.
+</Note>
+
+## StepResult fields
+
+Both `reset()` and `step()` return a `StepResult`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `observation` | `Observation` subclass | The new state of the environment |
+| `reward` | `float \| None` | Reward signal (`None` after `reset()`) |
+| `done` | `bool` | `True` when the episode has ended |
+
+## Related pages
+
+<CardGroup cols={2}>
+  <Card title="The RL loop" icon="rotate" href="/reference/rl-loop">
+    How `reset()`, `step()`, and `state()` fit into the observe-act-reward loop.
+  </Card>
+  <Card title="3-component pattern" icon="layers" href="/reference/3-component-pattern">
+    Where these methods live in the directory structure.
+  </Card>
+</CardGroup>

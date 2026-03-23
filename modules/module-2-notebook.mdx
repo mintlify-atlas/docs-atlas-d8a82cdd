@@ -1,0 +1,149 @@
+---
+title: "Module 2 Notebook"
+description: "Hands-on: build and compare policies on Catch, run a competition, switch games"
+---
+
+## Overview
+
+This notebook puts the concepts from [Module 2](/modules/module-2-concepts) into practice. You'll write four policies for the Catch game, run a head-to-head competition to compare their performance, then switch to a different OpenSpiel game using the same client code.
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/huggingface/openenv-course/blob/main/module-2/notebook.ipynb)
+
+## What the notebook covers
+
+<Steps>
+  <Step title="Connect to the Environment Hub">
+    Install the OpenSpiel client and point it at the hosted Catch environment on Hugging Face Spaces. No Docker setup required — the environment is already running.
+
+    ```python
+    from envs.openspiel_env import OpenSpielEnv
+
+    with OpenSpielEnv(base_url="https://openenv-openspiel-catch.hf.space").sync() as env:
+        result = env.reset()
+    ```
+  </Step>
+  <Step title="Build four policies">
+    Implement all four policy patterns from the module concepts. Each policy takes an `OpenSpielObservation` and returns an action integer from `obs.legal_actions`.
+
+    ```python
+    def random_policy(obs):
+        return random.choice(obs.legal_actions)
+
+    def stay_policy(obs):
+        return 1  # STAY
+
+    def smart_policy(obs):
+        ball_col = find_ball(obs.info_state)
+        paddle_col = find_paddle(obs.info_state)
+        if paddle_col < ball_col: return 2  # RIGHT
+        if paddle_col > ball_col: return 0  # LEFT
+        return 1  # STAY
+
+    def learning_policy(obs, step):
+        epsilon = max(0.1, 1.0 - step / 100)
+        if random.random() < epsilon:
+            return random.choice(obs.legal_actions)
+        return smart_policy(obs)
+    ```
+  </Step>
+  <Step title="Run a competition">
+    Evaluate each policy over multiple episodes and compare success rates. Expected results:
+
+    | Policy | Expected success rate |
+    |--------|-----------------------|
+    | Random | ~20% |
+    | Always stay | ~20% |
+    | Epsilon-greedy | ~85% |
+    | Smart heuristic | 100% |
+  </Step>
+  <Step title="Switch games">
+    Change the `base_url` to connect to Tic-Tac-Toe. Your policy code and observation handling stay the same — the `OpenSpielObservation` fields are identical across all six games.
+
+    ```python
+    # Same client, different URL
+    with OpenSpielEnv(base_url="https://openenv-openspiel-tictactoe.hf.space").sync() as env:
+        result = env.reset()
+    ```
+  </Step>
+</Steps>
+
+## Running the notebook
+
+<Steps>
+  <Step title="Open in Google Colab">
+    Click the **Open in Colab** badge above, or navigate directly to:
+
+    ```
+    https://colab.research.google.com/github/huggingface/openenv-course/blob/main/module-2/notebook.ipynb
+    ```
+  </Step>
+  <Step title="Install dependencies">
+    Run the first cell to install the OpenEnv client package:
+
+    ```bash
+    pip install openenv-core
+    git clone https://github.com/meta-pytorch/OpenEnv.git
+    ```
+  </Step>
+  <Step title="Run all cells top-to-bottom">
+    Each section builds on the previous one. Run cells in order. The Catch and Tic-Tac-Toe environments are already hosted — no local setup required.
+  </Step>
+</Steps>
+
+## Key code patterns
+
+<Tabs>
+  <Tab title="Reading observations">
+    Use typed fields instead of array indices. Your IDE can autocomplete these:
+
+    ```python
+    result = env.step(OpenSpielAction(action_id=action, game_name="catch"))
+    obs = result.observation
+
+    print(obs.info_state)           # Game state as a vector
+    print(obs.legal_actions)        # Valid actions this step
+    print(obs.current_player_id)    # Whose turn
+    print(obs.done)                 # Episode over?
+    print(obs.reward)               # Reward signal
+    ```
+  </Tab>
+  <Tab title="Running an episode">
+    Standard RL loop using the 3-method interface:
+
+    ```python
+    with OpenSpielEnv(base_url="https://openenv-openspiel-catch.hf.space").sync() as env:
+        result = env.reset()
+        step = 0
+        while not result.observation.done:
+            action = your_policy(result.observation)
+            result = env.step(OpenSpielAction(action_id=action, game_name="catch"))
+            step += 1
+    ```
+  </Tab>
+  <Tab title="Switching games">
+    The only change needed to switch games is the URL:
+
+    ```python
+    # Catch
+    with OpenSpielEnv(base_url="https://openenv-openspiel-catch.hf.space").sync() as env:
+        result = env.reset()
+
+    # Tic-Tac-Toe — same client, different URL
+    with OpenSpielEnv(base_url="https://openenv-openspiel-tictactoe.hf.space").sync() as env:
+        result = env.reset()
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  All six OpenSpiel games share the same `OpenSpielEnv` client and `OpenSpielAction`/`OpenSpielObservation` types. Once you've written a policy for one game, connecting it to another takes one line.
+</Note>
+
+<CardGroup cols={2}>
+  <Card title="Back to concepts" icon="book" href="/modules/module-2-concepts">
+    Review the Environment Hub, type-safe models, and policy patterns.
+  </Card>
+  <Card title="Module 3" icon="play" href="/modules/module-3-concepts">
+    Build your own custom OpenEnv environment from scratch.
+  </Card>
+</CardGroup>

@@ -1,0 +1,204 @@
+---
+title: "Module 5: Training with TRL"
+description: "GRPO, reward functions, rollout functions, and training Qwen3 to play Wordle"
+---
+
+## What is GRPO?
+
+**Group Relative Policy Optimization** is a reinforcement learning algorithm for fine-tuning LLMs. The core loop has three steps:
+
+1. Generate a group of completions for the same prompt
+2. Score each completion with reward functions
+3. Use the relative ranking within the group to update the policy
+
+<Note>
+  GRPO does not need a value model. The group of completions itself provides the baseline — contrast this with PPO, which requires a separate critic network. This makes GRPO simpler to set up and less memory-intensive.
+</Note>
+
+GRPO works well for any task where you can define reward functions: games, code generation, reasoning, and structured output.
+
+## TRL + OpenEnv integration
+
+TRL (Transformers Reinforcement Learning) provides `GRPOTrainer` with native OpenEnv support. The key abstraction is the **rollout function** — it defines how the model interacts with the environment during training.
+
+The training loop:
+
+1. `GRPOTrainer` calls your rollout function with prompts
+2. Your function generates completions using the model
+3. Each completion is sent as an action to the environment
+4. The environment returns observations and rewards
+5. TRL uses the rewards to update the model
+
+```python
+trainer = GRPOTrainer(
+    model=model_name,
+    reward_funcs=[reward_correct, reward_greens, reward_yellows],
+    rollout_func=rollout_func,   # Your environment interaction
+    train_dataset=dataset,
+    args=grpo_config,
+)
+trainer.train()
+```
+
+OpenEnv makes the environment a plug-in. The training pipeline stays the same — swap Wordle for your Module 4 word game, a coding environment, a math problem, or anything else. The `rollout_func` interface is the same.
+
+## The Wordle training pipeline
+
+The goal: train Qwen3-1.7B to play Wordle using the TextArena environment.
+
+<Steps>
+  <Step title="Environment setup">
+    Connect to the TextArena Wordle environment:
+
+    ```python
+    from envs.textarena_env import TextArenaEnv
+
+    env = TextArenaEnv(base_url="https://burtenshaw-textarena.hf.space")
+    ```
+
+    The TextArena Wordle environment:
+
+    - Accepts guesses as `[word]` — 5-letter words in brackets
+    - Returns feedback: `G` (green), `Y` (yellow), `X` (gray) for each letter
+    - 6 attempts per game
+    - Reward: `1.0` for a correct guess, `0.0` otherwise
+  </Step>
+
+  <Step title="System prompt">
+    The system prompt guides the model's strategy throughout a game:
+
+    ```python
+    system_prompt = """
+    You are an expert Wordle solver.
+
+    RULES:
+    - Guess a 5-letter English word
+    - Feedback: GREEN (correct position), YELLOW (wrong position), GRAY (not in word)
+    - 6 attempts maximum
+
+    RESPONSE FORMAT:
+    Only respond with your guess in square brackets, e.g., [crane]
+
+    STRATEGY:
+    - Start with vowel-rich words: CRANE, SLATE, STARE
+    - Use GREEN letters in their positions
+    - Move YELLOW letters to new positions
+    - Eliminate GRAY letters
+    """
+    ```
+  </Step>
+
+  <Step title="Reward functions">
+    Multiple reward signals give the model richer gradient information than a single win/loss signal:
+
+    | Reward | What it measures | Range |
+    |--------|-----------------|-------|
+    | `reward_correct` | Did the model solve the puzzle? | 0.0 or 1.0 |
+    | `reward_greens` | How many green letters in the guess? | 0.0 to 1.0 |
+    | `reward_yellows` | How many yellow letters in the guess? | 0.0 to 1.0 |
+    | `reward_repetition` | Penalize repeated guesses | 0.0 to 1.0 |
+
+    Greens and yellows provide shaping signal even when the model doesn't win. The repetition penalty discourages guessing the same word twice.
+  </Step>
+
+  <Step title="Rollout function">
+    The rollout function plays one full Wordle game. `GRPOTrainer` calls it once per training sample:
+
+    ```python
+    def rollout_once(trainer, env, tokenizer, prompt, system_prompt, max_turns):
+        result = env.reset()
+        observation = result.observation
+
+        for turn in range(max_turns):
+            if result.done:
+                break
+
+            # Build prompt from game state
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": format_game_state(observation)},
+            ]
+
+            # Generate with the model
+            rollout = generate_rollout_completions(trainer, [messages])
+
+            # Parse guess and send to environment
+            guess = extract_guess(rollout["text"])
+            result = env.step(TextArenaAction(message=guess))
+            observation = result.observation
+
+        return {
+            "prompt_ids": ..., "completion_ids": ..., "logprobs": ...,
+            "correct_reward": ..., "green_reward": ...,
+        }
+    ```
+  </Step>
+
+  <Step title="GRPO configuration">
+    Configure `GRPOTrainer` for single-GPU training on an A100:
+
+    ```python
+    grpo_config = GRPOConfig(
+        num_train_epochs=1,
+        learning_rate=5e-6,
+        gradient_accumulation_steps=64,
+        per_device_train_batch_size=1,
+        num_generations=2,
+        max_completion_length=8,
+        max_prompt_length=1400,
+        use_vllm=True,
+        vllm_mode="colocate",
+        vllm_gpu_memory_utilization=0.1,
+        gradient_checkpointing=True,
+        report_to="trackio",
+    )
+    ```
+
+    Key settings:
+
+    - **`vllm_mode="colocate"`** — generation and training share one GPU, no second machine needed
+    - **`gradient_accumulation_steps=64`** — effective batch size without running out of memory
+    - **`max_completion_length=8`** — Wordle guesses are short, so 8 tokens is enough
+  </Step>
+</Steps>
+
+## Hardware requirements
+
+<Warning>
+  This training run requires an A100 40GB GPU. A standard Colab T4 or smaller GPU will run out of memory. Use Colab Pro or a cloud instance with an A100.
+</Warning>
+
+| Resource | Requirement |
+|----------|-------------|
+| GPU | A100 40GB (Colab Pro or similar) |
+| Training time | ~90 minutes |
+| Peak memory | ~37GB |
+
+## What the model learns
+
+After training, the model:
+
+- Opens with strong starting words (CRANE, SLATE)
+- Uses feedback to narrow down candidates across turns
+- Places confirmed letters in their correct positions
+- Still struggles with repeated guesses — a common RL challenge
+
+This is a starting point. Improvements to explore:
+
+- Longer training runs
+- Stronger repetition penalties
+- Larger models (Qwen3-8B and above)
+- Custom environments — swap Wordle for any environment you built in Modules 1–4
+
+## The key insight
+
+OpenEnv makes the environment a plug-in. Build the environment in Modules 1–4, plug it into `GRPOTrainer` via the `rollout_func` interface, and train. The pipeline is the same regardless of what the environment does.
+
+<CardGroup cols={2}>
+  <Card title="Module 5 notebook" icon="notebook" href="/modules/module-5-notebook">
+    Hands-on: run the full Wordle GRPO training pipeline on an A100.
+  </Card>
+  <Card title="Back to Module 4" icon="arrow-left" href="/modules/module-4-concepts">
+    Review building environments with the 3-component pattern.
+  </Card>
+</CardGroup>

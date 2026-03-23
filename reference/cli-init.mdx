@@ -1,0 +1,94 @@
+---
+title: "openenv init"
+description: "Scaffold a new OpenEnv environment with the correct directory structure"
+---
+
+## Syntax
+
+```bash
+openenv init <name>
+```
+
+<ParamField path="path.name" type="string" required>
+  The name of the environment to scaffold. Used as the directory name and as the default package name in `pyproject.toml`. Use underscores for multi-word names (e.g. `word_game`, not `word-game`).
+</ParamField>
+
+## What it creates
+
+Running `openenv init word_game` produces:
+
+<Tree>
+  <Tree.Folder name="word_game" defaultOpen>
+    <Tree.File name="models.py" />
+    <Tree.File name="client.py" />
+    <Tree.Folder name="server" defaultOpen>
+      <Tree.File name="environment.py" />
+      <Tree.File name="app.py" />
+      <Tree.File name="Dockerfile" />
+    </Tree.Folder>
+    <Tree.File name="openenv.yaml" />
+    <Tree.File name="pyproject.toml" />
+  </Tree.Folder>
+</Tree>
+
+Every file contains working placeholder code — the scaffolded environment runs immediately without modification.
+
+## What you fill in
+
+After scaffolding, edit three files:
+
+1. **`models.py`** — replace the placeholder `Action`, `Observation`, and `State` with your own Pydantic fields
+2. **`server/environment.py`** — implement your game or simulation logic in `reset()`, `step()`, and `state`
+3. **`client.py`** — implement `_step_payload()`, `_parse_result()`, and `_parse_state()` to match your models
+
+`server/app.py` and `server/Dockerfile` rarely need changes.
+
+## Example workflow
+
+<Steps>
+  <Step title="Scaffold">
+    ```bash
+    openenv init word_game
+    cd word_game
+    ```
+  </Step>
+  <Step title="Define your types">
+    Edit `models.py` to define `WordGameAction`, `WordGameObservation`, and `WordGameState`.
+  </Step>
+  <Step title="Implement game logic">
+    Edit `server/environment.py` to implement `reset()`, `step()`, and the `state` property.
+  </Step>
+  <Step title="Update the client">
+    Edit `client.py` so `_parse_result()` maps the server response to your `WordGameObservation`.
+  </Step>
+  <Step title="Test locally">
+    ```bash
+    uv run server
+    ```
+
+    The server starts at `http://localhost:8000`. Visit `/web` for the browser UI or `/docs` for the interactive API docs.
+  </Step>
+  <Step title="Deploy">
+    ```bash
+    openenv push --repo-id username/word-game
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  The pattern is always the same — types, server logic, client, container. Once you've built one environment, every subsequent one follows the same steps.
+</Tip>
+
+## Related pages
+
+<CardGroup cols={2}>
+  <Card title="openenv push" icon="rocket" href="/reference/cli-push">
+    Deploy your scaffolded environment to Hugging Face Spaces.
+  </Card>
+  <Card title="3-component pattern" icon="layers" href="/reference/3-component-pattern">
+    Detailed reference for each file that `openenv init` creates.
+  </Card>
+  <Card title="Module 4: Building environments" icon="book" href="/modules/module-4-concepts">
+    Hands-on walkthrough using `openenv init` to build a word game.
+  </Card>
+</CardGroup>

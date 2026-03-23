@@ -1,0 +1,112 @@
+---
+title: "Module 1 Notebook"
+description: "Hands-on: connect to Echo, OpenSpiel Catch, and TextArena Wordle environments"
+---
+
+## Overview
+
+This notebook puts the concepts from [Module 1](/modules/module-1-concepts) into practice. You'll connect to three real hosted environments — Echo, OpenSpiel Catch, and TextArena Wordle — each using the same 3-method interface: `reset()`, `step()`, `state()`.
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/huggingface/openenv-course/blob/main/module-1/notebook.ipynb)
+
+## What the notebook covers
+
+<Steps>
+  <Step title="Echo environment (MCP-based)">
+    Connect to the Echo environment — the simplest possible OpenEnv environment. Echo uses a tool-based MCP interface, so you'll call `env.list_tools()` and `env.call_tool(name, **kwargs)` instead of the standard `reset()`/`step()` methods.
+  </Step>
+  <Step title="OpenSpiel Catch">
+    Connect to a classic RL control task hosted on HF Spaces. Use the typed `OpenSpielAction` model to take actions, and read `legal_actions` from the observation.
+  </Step>
+  <Step title="TextArena Wordle">
+    Connect to a language-based environment where the agent must guess a five-letter word. Practice reading structured observations and forming text-based actions.
+  </Step>
+</Steps>
+
+## Running the notebook
+
+<Steps>
+  <Step title="Open in Google Colab">
+    Click the **Open in Colab** badge above, or navigate directly to:
+
+    ```
+    https://colab.research.google.com/github/huggingface/openenv-course/blob/main/module-1/notebook.ipynb
+    ```
+  </Step>
+  <Step title="Install dependencies">
+    Run the first cell to install `openenv-core` and clone the environments:
+
+    ```bash
+    pip install openenv-core
+    git clone https://github.com/meta-pytorch/OpenEnv.git
+    ```
+  </Step>
+  <Step title="Run all cells top-to-bottom">
+    Each section of the notebook builds on the previous one. Run cells in order. All environments are already hosted — no Docker setup required.
+  </Step>
+</Steps>
+
+## Code examples
+
+<Tabs>
+  <Tab title="Echo (MCP-based)">
+    The Echo environment uses a tool-based interface:
+
+    ```python
+    tools = env.list_tools()
+    result = env.call_tool("echo", message="hello")
+    ```
+  </Tab>
+  <Tab title="OpenSpiel Catch">
+    Connect to the OpenSpiel Catch environment on HF Spaces:
+
+    ```python
+    from envs.openspiel_env import OpenSpielEnv
+    from envs.openspiel_env.models import OpenSpielAction
+
+    with OpenSpielEnv(base_url="https://openenv-openspiel-catch.hf.space").sync() as env:
+        result = env.reset()
+        result = env.step(OpenSpielAction(action_id=1, game_name="catch"))
+        print(result.observation.legal_actions)
+    ```
+  </Tab>
+  <Tab title="TextArena Wordle">
+    The Wordle environment accepts text actions and returns structured observations:
+
+    ```python
+    with WordleEnv(base_url="https://...").sync() as env:
+        result = env.reset()
+        result = env.step(action)
+        print(result.observation)
+        print(result.reward)
+        print(result.done)
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  All three environments follow the same pattern: `reset()` to start an episode, `step(action)` to advance it, and `state()` to inspect metadata. The only exception is Echo, which uses the MCP tool-based interface.
+</Note>
+
+## Key takeaway
+
+After completing this notebook, you'll have connected to three different environments — and used the same RL loop for each one:
+
+```python
+while not done:
+    observation = environment.observe()
+    action = policy.choose(observation)
+    reward = environment.step(action)
+    policy.learn(reward)
+```
+
+This is the core idea behind OpenEnv: every environment, regardless of what it simulates, exposes the same interface.
+
+<CardGroup cols={2}>
+  <Card title="Back to concepts" icon="book" href="/modules/module-1-concepts">
+    Review the RL loop, Gymnasium limitations, and OpenEnv architecture.
+  </Card>
+  <Card title="Module 2: Using environments" icon="play" href="/modules/module-2-concepts">
+    Write policies, connect to the Environment Hub, and run a game competition.
+  </Card>
+</CardGroup>

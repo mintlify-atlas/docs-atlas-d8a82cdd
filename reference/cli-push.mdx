@@ -1,0 +1,96 @@
+---
+title: "openenv push"
+description: "Deploy a local environment to Hugging Face Spaces"
+---
+
+## Syntax
+
+```bash
+cd my_env
+openenv push --repo-id <username>/<repo>
+```
+
+<ParamField path="query.repo-id" type="string" required>
+  The Hugging Face repository ID in `username/repo-name` format. The Space is created if it does not exist. Use hyphens for multi-word repo names (e.g. `username/word-game`).
+</ParamField>
+
+## What it does
+
+`openenv push` packages your local environment and deploys it as a Hugging Face Space running in a Docker container. After the push completes, four URLs are immediately live:
+
+| URL | What it serves |
+|-----|----------------|
+| `https://username-my-env.hf.space` | API endpoint |
+| `https://username-my-env.hf.space/web` | Browser-based web UI |
+| `https://username-my-env.hf.space/docs` | Interactive API documentation |
+| `https://username-my-env.hf.space/health` | Health check |
+
+Your users can install the client package directly from the Space's repository:
+
+```bash
+pip install git+https://huggingface.co/spaces/username/my-env
+```
+
+## The `openenv.yaml` manifest
+
+The `openenv.yaml` file at the root of your environment controls Space settings:
+
+```yaml
+name: my_env
+version: "1.0.0"
+description: My custom environment
+```
+
+| Field | Description |
+|-------|-------------|
+| `name` | Environment name (used in Space metadata) |
+| `version` | Semantic version string |
+| `description` | Short description displayed on the Space page |
+
+## Environment variables
+
+Configure your deployment via **Space Settings → Variables**:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WORKERS` | 4 | Uvicorn worker processes |
+| `PORT` | 8000 | Server port |
+| `HOST` | 0.0.0.0 | Bind address |
+| `MAX_CONCURRENT_ENVS` | 100 | Max WebSocket sessions per worker |
+
+<Note>
+  With 4 workers and `MAX_CONCURRENT_ENVS=100`, a single Space handles up to 400 concurrent WebSocket sessions.
+</Note>
+
+## Hardware options
+
+| Tier | vCPU | RAM | Cost |
+|------|------|-----|------|
+| CPU Basic (Free) | 2 | 16 GB | Free |
+| CPU Upgrade | 8 | 32 GB | $0.03/hr |
+
+The free tier handles ~128 concurrent sessions — enough for development and demos. For large-scale training, upgrade to CPU Upgrade or use multi-container scaling.
+
+## Full workflow
+
+```
+1. openenv init my_env                                            # Scaffold
+2. Edit server/environment.py                                     # Implement logic
+3. uv run server                                                  # Test locally
+4. openenv push --repo-id username/my-env                         # Deploy
+5. pip install git+https://huggingface.co/spaces/username/my-env  # Install client
+```
+
+## Related pages
+
+<CardGroup cols={2}>
+  <Card title="openenv init" icon="terminal" href="/reference/cli-init">
+    Scaffold a new environment before pushing.
+  </Card>
+  <Card title="Scaling" icon="arrow-up-right-dots" href="/reference/scaling">
+    Maximize concurrent sessions with worker and container configuration.
+  </Card>
+  <Card title="Module 3: Deploying environments" icon="book" href="/modules/module-3-concepts">
+    End-to-end walkthrough: local dev, Docker, and HF Spaces deployment.
+  </Card>
+</CardGroup>
