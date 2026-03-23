@@ -1,0 +1,84 @@
+{
+  "projectType": "ai-ml",
+  "projectName": "OpenEnv Course",
+  "projectDescription": "A hands-on 5-module course teaching ML engineers how to use, build, deploy, and train LLMs with reinforcement learning environments using the OpenEnv framework.",
+  "theme": "almond",
+  "primaryColor": "#bd8236",
+  "lightColor": "#dad2cb",
+  "darkColor": "#fbab04",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Course",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": ["introduction", "quickstart"]
+          },
+          {
+            "group": "Module 1: Why OpenEnv?",
+            "pages": ["modules/module-1-concepts", "modules/module-1-notebook"]
+          },
+          {
+            "group": "Module 2: Using Environments",
+            "pages": ["modules/module-2-concepts", "modules/module-2-notebook"]
+          },
+          {
+            "group": "Module 3: Deploying Environments",
+            "pages": ["modules/module-3-concepts", "modules/module-3-notebook"]
+          },
+          {
+            "group": "Module 4: Building Environments",
+            "pages": ["modules/module-4-concepts", "modules/module-4-notebook"]
+          },
+          {
+            "group": "Module 5: Training with TRL",
+            "pages": ["modules/module-5-concepts", "modules/module-5-notebook"]
+          }
+        ]
+      },
+      {
+        "tab": "Reference",
+        "groups": [
+          {
+            "group": "Core Concepts",
+            "pages": ["reference/rl-loop", "reference/3-method-interface", "reference/3-component-pattern"]
+          },
+          {
+            "group": "CLI",
+            "pages": ["reference/cli-init", "reference/cli-push"]
+          },
+          {
+            "group": "Scaling",
+            "pages": ["reference/scaling"]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "5 structured modules covering RL environment concepts through production training",
+    "Hands-on Jupyter notebooks for each module (Google Colab compatible)",
+    "OpenEnv 3-method interface: reset(), step(), state()",
+    "Type-safe environment models using Pydantic",
+    "Deployment to HF Spaces with openenv push",
+    "End-to-end GRPO training with TRL and Qwen3",
+    "WebSocket-based environment communication for low-latency RL",
+    "Docker-based isolation and reproducibility"
+  ],
+  "publicApiSurface": [
+    "env.reset()",
+    "env.step(action)",
+    "env.state()",
+    "env.call_tool(name, **kwargs)",
+    "env.list_tools()",
+    "EnvClient base class",
+    "Environment base class",
+    "create_fastapi_app(EnvironmentClass)",
+    "openenv init <name>",
+    "openenv push --repo-id <username>/<repo>",
+    "GRPOTrainer with rollout_func",
+    "StepResult",
+    "Action / Observation / State base models"
+  ]
+}
