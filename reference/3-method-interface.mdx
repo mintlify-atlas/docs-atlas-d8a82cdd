@@ -119,9 +119,13 @@ with WordGameEnv(base_url="...").sync() as env:
 For simple MCP-based environments (like the Echo environment), the interface is tool-based instead of method-based:
 
 ```python
-tools = await env.list_tools()
-result = await env.call_tool("reset")
-result = await env.call_tool("step", guess="hello")
+from envs.echo_env import EchoEnv
+
+with EchoEnv(base_url="https://openenv-echo-env.hf.space").sync() as env:
+    env.reset()
+    tools = env.list_tools()
+    response = env.call_tool("echo_message", message="Hello, OpenEnv!")
+    print(response)  # Hello, OpenEnv!
 ```
 
 <Note>

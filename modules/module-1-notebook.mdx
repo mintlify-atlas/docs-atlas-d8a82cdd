@@ -53,8 +53,13 @@ This notebook puts the concepts from [Module 1](/modules/module-1-concepts) into
     The Echo environment uses a tool-based interface:
 
     ```python
-    tools = env.list_tools()
-    result = env.call_tool("echo", message="hello")
+    from envs.echo_env import EchoEnv
+
+    with EchoEnv(base_url="https://openenv-echo-env.hf.space").sync() as env:
+        env.reset()
+        tools = env.list_tools()
+        response = env.call_tool("echo_message", message="Hello, OpenEnv!")
+        print(response)  # Hello, OpenEnv!
     ```
   </Tab>
   <Tab title="OpenSpiel Catch">
@@ -74,7 +79,9 @@ This notebook puts the concepts from [Module 1](/modules/module-1-concepts) into
     The Wordle environment accepts text actions and returns structured observations:
 
     ```python
-    with WordleEnv(base_url="https://...").sync() as env:
+    from envs.textarena_env import TextArenaEnv
+
+    with TextArenaEnv(base_url="https://burtenshaw-textarena.hf.space").sync() as env:
         result = env.reset()
         result = env.step(action)
         print(result.observation)

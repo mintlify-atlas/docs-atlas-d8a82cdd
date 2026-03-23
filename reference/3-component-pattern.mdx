@@ -112,11 +112,14 @@ class WordGameEnvironment(Environment):
         lost = self._remaining <= 0
         done = won or lost
 
-        reward = 1.0 if won else 0.0
         if won:
+            reward = 1.0
             message = f"You got it! The word was '{self._target}'."
         elif lost:
+            reward = 0.0
             message = f"Out of attempts. The word was '{self._target}'."
+        else:
+            reward = 0.0
 
         return WordGameObservation(
             done=done,
